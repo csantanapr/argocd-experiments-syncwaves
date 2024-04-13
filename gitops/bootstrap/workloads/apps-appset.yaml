@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "101"
+spec:
+  syncPolicy:
+    preserveResourcesOnDeletion: false
+  generators:
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchLabels:
+                  argocd.argoproj.io/secret-type: cluster
+          - git:
+              repoURL: '{{metadata.annotations.workload_repo_url}}'
+              revision: '{{metadata.annotations.workload_repo_revision}}'
+              directories:
+                - path: '{{metadata.annotations.workload_repo_basepath}}{{metadata.annotations.workload_repo_path}}/*'
+  template:
+    metadata:
+      name: app-{{path.basename}}
+      finalizers:
+        # This finalizer is for demo purposes, in production remove apps using argocd CLI "argocd app delete workload --cascade"
+        # When you invoke argocd app delete with --cascade, the finalizer is added automatically.
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      source:
+        repoURL: '{{metadata.annotations.workload_repo_url}}'
+        path: '{{path}}'
+        targetRevision: '{{metadata.annotations.workload_repo_revision}}'
+      destination:
+        name: '{{name}}'
+      syncPolicy:
+        automated:
+          allowEmpty: true
+        syncOptions:
+        - CreateNamespace=true
+        retry:
+          backoff:
+            duration: 1m
+          limit: 60
